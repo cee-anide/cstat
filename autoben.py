@@ -16,9 +16,9 @@ from selenium.webdriver.support.wait import WebDriverWait
 @dataclass
 class PlayerCstat:
     name: str
-    total_time: str
-    human_time: str
-    zombie_time: str
+    total_time: float
+    human_time: float
+    zombie_time: float
     zombie_kills: int
     zombie_hs: int
     infected: int
@@ -38,11 +38,11 @@ class PlayerCstat:
             if parts[0] == "cStat Details":
                 self.name = parts[1]
             elif parts[0] == "Total Time":
-                self.total_time = parts[1]
+                self.total_time = PlayerCstat.time_convert(parts[1])
             elif parts[0] == "Human Time":
-                self.human_time = parts[1]
+                self.human_time = PlayerCstat.time_convert(parts[1])
             elif parts[0] == "Zombie Time":
-                self.zombie_time = parts[1]
+                self.zombie_time = PlayerCstat.time_convert(parts[1])
             elif parts[0] == "Zombies Killed":
                 self.zombie_kills = int(parts[1])
             elif parts[0] == "Zombies Killed (HS)":
@@ -60,6 +60,26 @@ class PlayerCstat:
             else:
                 print(parts[0], "does not match a case")
                 raise Exception
+            
+    def time_convert(timestring: str) -> float:
+        splitstring = timestring.split(" ")
+        splitstring.pop(0)
+        days = 0.0
+        hours = 0.0
+        minutes = 0.0
+        seconds = 0.0
+        for part in splitstring:
+            if "d" in part:
+                days = int(part.rstrip("d"))
+            elif "h" in part:
+                hours = int(part.rstrip("h"))
+            elif "m" in part:
+                minutes = int(part.rstrip("m"))
+            elif "s" in part:
+                seconds = int(part.rstrip("s"))
+
+        time = days + (hours / 24) + (minutes / 1440 ) + (seconds / 86400)
+        return time
 
 
 def main():
@@ -126,9 +146,9 @@ def scrape_text(pages: int) -> List[List[str]]:
 def raw_extract_to_dataframe(entries: List[List[str]]) -> pd.DataFrame:
     column_names = {
         "name": "Player", 
-        "total_time": "Total Time", 
-        "human_time": "Human Time", 
-        "zombie_time": "Zombie Time", 
+        "total_time": "Total Time (days)", 
+        "human_time": "Human Time (days)", 
+        "zombie_time": "Zombie Time (days)", 
         "zombie_kills": "Zombies Killed",
         "zombie_hs": "Zombies Killed (HS)",
         "infected": "Infected",
