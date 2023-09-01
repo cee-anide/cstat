@@ -1,4 +1,5 @@
 from typing import List
+from pathlib import Path
 from dataclasses import dataclass
 import sys
 from math import ceil
@@ -16,6 +17,7 @@ from selenium.webdriver.support.wait import WebDriverWait
 @dataclass
 class PlayerCstat:
     name: str
+    points: float
     total_time: float
     human_time: float
     zombie_time: float
@@ -36,7 +38,9 @@ class PlayerCstat:
                 raise Exception
 
             if parts[0] == "cStat Details":
-                self.name = parts[1]
+                self.name = parts[1].strip()
+            elif parts[0] == "Points":
+                self.points = float(parts[1])
             elif parts[0] == "Total Time":
                 self.total_time = PlayerCstat.time_convert(parts[1])
             elif parts[0] == "Human Time":
@@ -83,18 +87,30 @@ class PlayerCstat:
 
 
 def main():
-    try:
-        pages = round_pages(sys.argv[1])
-    except (ValueError, IndexError):
-        print("invalid input")
-        exit(-1)
+    if sys.argv[1].lower() == "collect":
+        try:
+            pages = round_pages(sys.argv[2])
+        except (ValueError, IndexError):
+            print("invalid input")
+            exit(-1)
 
-    print("Collecting", pages, "page(s) of cstat data...")
-    raw_cstat_entries = scrape_text(pages)
-    df = raw_extract_to_dataframe(raw_cstat_entries)
-    df.to_excel("cstat.xlsx", index=False)
-    print("Done.")
-    exit(0)
+        excel_name = sys.argv[3]
+        # TODO: verify file name correct extension
+
+        print("Collecting", pages, "page(s) of cstat data...")
+        raw_cstat_entries = scrape_text(pages)
+        df = raw_extract_to_dataframe(raw_cstat_entries)
+        df.to_excel(excel_name, index=False)
+        print("Done.")
+        exit(0)
+
+    elif sys.argv[1].lower() == "compare":
+        # TODO: verify files
+        file_to_read = sys.argv[2]
+        old_data = pd.read_excel(file_to_read)
+        file_to_read = sys.argv[3]
+        new_data = pd.read_excel(file_to_read)
+        find_cstat_gain(old_data, new_data)
 
 
 def round_pages(arg: str) -> int:
@@ -109,7 +125,7 @@ def scrape_text(pages: int) -> List[List[str]]:
     options.binary = FirefoxBinary("/snap/bin/firefox")
     driver = webdriver.Firefox(options=options)
 
-    url = "https://cstat.snowy.gg/?sort=totaltime"
+    url = "https://cstat.snowy.gg"
     wait = WebDriverWait(driver, 10.0, 0.5)
 
     driver.get(url)
@@ -126,11 +142,13 @@ def scrape_text(pages: int) -> List[List[str]]:
 
         tables = driver.find_elements(By.CLASS_NAME, "table-opener")
         
+        table_idx = 0
         for table in tables:
-            entry: List[str] = []
+            entry: List[str] = ["Points:" + clickable_table_rows[table_idx].text.splitlines()[2]]
             for e in table.find_elements(By.CSS_SELECTOR, "tr"):
                 entry.append(e.text)
 
+            table_idx += 1
             cstat.append(entry)
 
         
@@ -145,7 +163,8 @@ def scrape_text(pages: int) -> List[List[str]]:
 
 def raw_extract_to_dataframe(entries: List[List[str]]) -> pd.DataFrame:
     column_names = {
-        "name": "Player", 
+        "name": "Player",
+        "points": "Points", 
         "total_time": "Total Time (days)", 
         "human_time": "Human Time (days)", 
         "zombie_time": "Zombie Time (days)", 
@@ -165,6 +184,15 @@ def raw_extract_to_dataframe(entries: List[List[str]]) -> pd.DataFrame:
     df = pd.DataFrame(cstat_objs)
     df.rename(columns=column_names, inplace=True)
     return df
+
+
+def find_cstat_gain(old_data: pd.DataFrame, new_data: pd.DataFrame):
+    
+    compared_stats = pd.DataFrame(old_data)
+    print(compared_stats.loc[compared_stats["Player"] == "cee anide"])
+    
+
+
 
 
 if __name__ == "__main__":
