@@ -188,12 +188,59 @@ def raw_extract_to_dataframe(entries: List[List[str]]) -> pd.DataFrame:
 
 def find_cstat_gain(old_data: pd.DataFrame, new_data: pd.DataFrame):
     
-    compared_stats = pd.DataFrame(old_data)
-    print(compared_stats.loc[compared_stats["Player"] == "cee anide"])
+    compared_stats = pd.DataFrame(
+        columns=["Player", "Total Time Diff", "Human Time Diff", "cStat/d Total", "cStat/d Human"])
+    # print(compared_stats)
+
+    # compared_stats.loc[len(compared_stats)] = ["xffing", 69.9, 49.9, 10000, 1000]
+    # print(compared_stats)
+
+    old_len = len(old_data)
+    new_len = len(new_data)
+    data_length = min(old_len, new_len)
     
+    compared_stats["Player"] = new_data["Player"]
+    # compared_stats["Total Time Diff"] = new_data["Total Time (days)"]
+    # compared_stats["Human Time Diff"] = new_data["Human Time (days)"]
+    # compared_stats = compared_stats.sort_values("Total Time Diff", ascending=False)
 
+    if len(compared_stats) > data_length:
+        compared_stats = compared_stats.iloc[0:data_length]
 
+    to_drop = []
+    for i in range(0, data_length):
+        player = compared_stats.loc[i, "Player"]
+        old_entry = old_data.loc[old_data["Player"] == player].reset_index(drop=True)
+        new_entry = new_data.loc[new_data["Player"] == player].reset_index(drop=True)
 
+        if old_entry.empty or new_entry.empty:
+            to_drop.append(player)
+            continue
+
+        comp_total_diff = new_entry.loc[0, "Total Time (days)"] - old_entry.loc[0, "Total Time (days)"]
+        comp_human_diff = new_entry.loc[0, "Human Time (days)"] - old_entry.loc[0, "Human Time (days)"]
+        comp_points = new_entry.loc[0, "Points"] - old_entry.loc[0, "Points"]
+
+        compared_stats.loc[i, "Total Time Diff"] = comp_total_diff
+        compared_stats.loc[i, "Human Time Diff"] = comp_human_diff
+
+        if comp_total_diff == 0 or comp_human_diff == 0 or comp_points == 0:
+            compared_stats.loc[i, "cStat/d Total"] = 0
+            compared_stats.loc[i, "cStat/d Human"] = 0
+        else:
+            compared_stats.loc[i, "cStat/d Total"] = comp_points / comp_total_diff
+            compared_stats.loc[i, "cStat/d Human"] = comp_points / comp_human_diff
+
+        if comp_points != 0:
+            print(player, comp_points)
+        
+    print(compared_stats)
+    print(compared_stats.loc[compared_stats["Player"] == to_drop[0]])
+    for name in to_drop:
+        compared_stats.drop(compared_stats[compared_stats["Player"] == name].index, inplace=True)
+    print(compared_stats.loc[compared_stats["Player"] == to_drop[0]])
+    compared_stats.to_excel("comptest.xlsx", index=False)
+    
 
 if __name__ == "__main__":
     main()
