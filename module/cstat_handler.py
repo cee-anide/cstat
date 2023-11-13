@@ -1,8 +1,5 @@
 from typing import List
 from pathlib import Path
-from dataclasses import dataclass
-import sys
-from math import ceil
 
 import pandas as pd
 
@@ -13,120 +10,33 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support.wait import WebDriverWait
 
+import module.playercstat as playercstat
 
-@dataclass
-class PlayerCstat:
-    name: str
-    points: float
-    total_time: float
-    human_time: float
-    zombie_time: float
-    zombie_kills: int
-    zombie_hs: int
-    infected: int
-    items_picked: int
-    boss_killed: int
-    leader_count: int
-    td_count: int
-
-    def __init__(self, raw_text: List[str]):
-        for line in raw_text:
-            parts = line.split(":", 1)
-
-            if len(parts) != 2:
-                print(line, "does not fit expected format")
-                raise Exception
-
-            if parts[0] == "cStat Details":
-                self.name = parts[1].strip()
-            elif parts[0] == "Points":
-                self.points = float(parts[1])
-            elif parts[0] == "Total Time":
-                self.total_time = PlayerCstat.time_convert(parts[1])
-            elif parts[0] == "Human Time":
-                self.human_time = PlayerCstat.time_convert(parts[1])
-            elif parts[0] == "Zombie Time":
-                self.zombie_time = PlayerCstat.time_convert(parts[1])
-            elif parts[0] == "Zombies Killed":
-                self.zombie_kills = int(parts[1])
-            elif parts[0] == "Zombies Killed (HS)":
-                self.zombie_hs = int(parts[1])
-            elif parts[0] == "Infected":
-                self.infected = int(parts[1].rstrip(" players"))
-            elif parts[0] == "Items picked up":
-                self.items_picked = int(parts[1])
-            elif parts[0] == "Boss Killed":
-                self.boss_killed = int(parts[1])
-            elif parts[0] == "Leader Count":
-                self.leader_count = int(parts[1])
-            elif parts[0] == "TopDefender Count":
-                self.td_count = int(parts[1])
-            else:
-                print(parts[0], "does not match a case")
-                raise Exception
-            
-    def time_convert(timestring: str) -> float:
-        splitstring = timestring.split(" ")
-        splitstring.pop(0)
-        days = 0.0
-        hours = 0.0
-        minutes = 0.0
-        seconds = 0.0
-        for part in splitstring:
-            if "d" in part:
-                days = int(part.rstrip("d"))
-            elif "h" in part:
-                hours = int(part.rstrip("h"))
-            elif "m" in part:
-                minutes = int(part.rstrip("m"))
-            elif "s" in part:
-                seconds = int(part.rstrip("s"))
-
-        time = days + (hours / 24) + (minutes / 1440 ) + (seconds / 86400)
-        return time
+URL_SORT_POINTS = "https://cstat.snowy.gg"
+URL_SORT_TIME = "https://cstat.snowy.gg/?sort=totaltime"
+URL_SORT_TD = "https://cstat.snowy.gg/?sort=td_count"
 
 
-def main():
-    if sys.argv[1].lower() == "collect":
-        try:
-            pages = round_pages(sys.argv[2])
-        except (ValueError, IndexError):
-            print("invalid input")
-            exit(-1)
-
-        excel_name = sys.argv[3]
-        # TODO: verify file name correct extension
-
-        print("Collecting", pages, "page(s) of cstat data...")
-        raw_cstat_entries = scrape_text(pages)
-        df = raw_extract_to_dataframe(raw_cstat_entries)
-        df.to_excel(excel_name, index=False)
-        print("Done.")
-        exit(0)
-
-    elif sys.argv[1].lower() == "compare":
-        # TODO: verify files
-        file_to_read = sys.argv[2]
-        old_data = pd.read_excel(file_to_read)
-        file_to_read = sys.argv[3]
-        new_data = pd.read_excel(file_to_read)
-        find_cstat_gain(old_data, new_data)
+def scrape_and_export(pages: int, outfile_name: Path, sort: str):
+    raw_cstat_entries = scrape_text(pages, sort)
+    print("Exporting", pages, "page(s) of cstat data...")
+    df = raw_extract_to_dataframe(raw_cstat_entries)
+    df.to_excel(outfile_name, index=False)
 
 
-def round_pages(arg: str) -> int:
-    count = ceil(int(arg) / 15.0)
-    if count < 0:
-        raise ValueError
-    return count
-
-
-def scrape_text(pages: int) -> List[List[str]]:
+def scrape_text(pages: int, sort: int) -> List[List[str]]:
     options = Options()
     options.binary = FirefoxBinary("/snap/bin/firefox")
     driver = webdriver.Firefox(options=options)
 
-    url = "https://cstat.snowy.gg"
     wait = WebDriverWait(driver, 10.0, 0.5)
+
+    if sort == "time":
+        url = URL_SORT_TIME
+    elif sort == "topdefender":
+        url = URL_SORT_POINTS
+    else:
+        url = URL_SORT_POINTS
 
     driver.get(url)
 
@@ -178,7 +88,7 @@ def raw_extract_to_dataframe(entries: List[List[str]]) -> pd.DataFrame:
     }
     cstat_objs = []
     for ent in entries:
-        obj = PlayerCstat(ent)
+        obj = playercstat.PlayerCstat(ent)
         cstat_objs.append(obj)
 
     df = pd.DataFrame(cstat_objs)
@@ -186,7 +96,12 @@ def raw_extract_to_dataframe(entries: List[List[str]]) -> pd.DataFrame:
     return df
 
 
-def find_cstat_gain(old_data: pd.DataFrame, new_data: pd.DataFrame):
+def find_cstat_diff(old_data_path: Path, new_data_path: Path, path_output: Path):
+
+    # File paths verified in main
+    old_data = pd.read_excel(old_data_path)
+    new_data = pd.read_excel(new_data_path)
+
     compared_stats = pd.DataFrame(
         columns=["Player", "Total Time Diff", "Human Time Diff", "cStat/d Total", "cStat/d Human"])
     
@@ -225,9 +140,4 @@ def find_cstat_gain(old_data: pd.DataFrame, new_data: pd.DataFrame):
     for name in to_drop:
         compared_stats.drop(compared_stats[compared_stats["Player"] == name].index, inplace=True)
 
-    # TODO: Name the file output
-    compared_stats.to_excel("comptest.xlsx", index=False)
-    
-
-if __name__ == "__main__":
-    main()
+    compared_stats.to_excel(path_output, index=False)
