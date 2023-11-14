@@ -5,9 +5,9 @@ This project scrapes the GFL CS:GO Zombie Escape Custom Stats page (https://csta
 This project was created to easily collect and compare player statistics. A player who was known for tracking weapon balance with advanced spreadsheets originally collected this data manually, so this project helped them call my stats "bad" more accurately.
 
 ## Requirements
-- Selenium and Pandas python libraries (see requirements.txt)
+- Selenium and Pandas python libraries (as well as their dependencies) can be installed by running `pip install -r requirements.txt`
 - Mozilla Firefox web browser
-- Web Driver for Firefox
+- Web Driver for Firefox (may be pre-installed for linux distributions)
 
 ## Usage
 Run `python cstat.py` for usage information.
